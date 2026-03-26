@@ -140,14 +140,42 @@ def generate_report(client_name: str, bai_total: int, bai_responses: dict,
     bai_level  = get_bai_level(bai_total)
     pswq_level = get_pswq_level(pswq_total)
 
+    BAI_EN = [
+        "Numbness or tingling", "Feeling hot", "Wobbliness in legs",
+        "Unable to relax", "Fear of worst happening", "Dizzy or lightheaded",
+        "Heart pounding / racing", "Unsteady", "Terrified or afraid",
+        "Nervous", "Feeling of choking", "Hands trembling",
+        "Shaky / unsteady", "Fear of losing control", "Difficulty in breathing",
+        "Fear of dying", "Scared", "Indigestion",
+        "Faint / lightheaded", "Face flushed", "Hot / cold sweats",
+    ]
+    PSWQ_EN = [
+        "If I do not have enough time to do everything, I do not worry about it.",
+        "My worries overwhelm me.",
+        "I do not tend to worry about things.",
+        "Many situations make me worry.",
+        "I know I should not worry about things, but I just cannot help it.",
+        "When I am under pressure I worry a lot.",
+        "I am always worrying about something.",
+        "I find it easy to dismiss worrisome thoughts.",
+        "As soon as I finish one task, I start to worry about everything else I have to do.",
+        "I never worry about anything.",
+        "When there is nothing more I can do about a concern, I do not worry about it any more.",
+        "I have been a worrier all my life.",
+        "I notice that I have been worrying about things.",
+        "Once I start worrying, I cannot stop.",
+        "I worry all the time.",
+        "I worry about projects until they are all done.",
+    ]
+
     bai_items = "\n".join(
-        f"  {q['text']}: {bai_responses[q['id']]}/3"
-        for q in BAI_QUESTIONS
+        f"  {BAI_EN[i]}: {bai_responses[q['id']]}/3"
+        for i, q in enumerate(BAI_QUESTIONS)
     )
 
     pswq_items = "\n".join(
-        f"  {'[R] ' if q['reverse'] else '      '}{q['text']}: raw={pswq_responses[q['id']]}, scored={(6 - pswq_responses[q['id']]) if q['reverse'] else pswq_responses[q['id']]}"
-        for q in PSWQ_QUESTIONS
+        f"  {'[R] ' if q['reverse'] else '      '}{PSWQ_EN[i]}: raw={pswq_responses[q['id']]}, scored={(6 - pswq_responses[q['id']]) if q['reverse'] else pswq_responses[q['id']]}"
+        for i, q in enumerate(PSWQ_QUESTIONS)
     )
 
     prompt = f"""You are a licensed clinical psychologist writing a confidential dual-instrument anxiety assessment report.
