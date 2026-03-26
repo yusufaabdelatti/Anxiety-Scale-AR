@@ -1,8 +1,8 @@
 import streamlit as st
-import requests
 import smtplib
-import os
+import requests
 import datetime
+import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -15,300 +15,250 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table,
     TableStyle, HRFlowable, Image as RLImage
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-
-# ══════════════════════════════════════════════════════════════
-#  CONFIGURATION
-# ══════════════════════════════════════════════════════════════
+from reportlab.lib.enums import TA_CENTER
 
 GMAIL_ADDRESS   = "Wijdan.psyc@gmail.com"
 GMAIL_PASSWORD  = "rias eeul lyuu stce"
 THERAPIST_EMAIL = "Wijdan.psyc@gmail.com"
 LOGO_FILE       = "logo.png"
 
-# ══════════════════════════════════════════════════════════════
-#  BAI — 21 فقرة، مقياس 0–3
-# ══════════════════════════════════════════════════════════════
-
-BAI_QUESTIONS = [
-    {"id": 1,  "text": "خدر أو وخز (تنميل)"},
-    {"id": 2,  "text": "الشعور بالحرارة"},
-    {"id": 3,  "text": "ارتعاش في الساقين"},
-    {"id": 4,  "text": "عدم القدرة على الاسترخاء"},
-    {"id": 5,  "text": "الخوف من حدوث الأسوأ"},
-    {"id": 6,  "text": "الدوار أو الإحساس بالإغماء"},
-    {"id": 7,  "text": "خفقان أو تسارع ضربات القلب"},
-    {"id": 8,  "text": "عدم الثبات أو الترنح"},
-    {"id": 9,  "text": "الشعور بالرعب أو الخوف الشديد"},
-    {"id": 10, "text": "العصبية والتوتر"},
-    {"id": 11, "text": "الإحساس بالاختناق"},
-    {"id": 12, "text": "ارتجاف اليدين"},
-    {"id": 13, "text": "الارتعاش أو عدم الاستقرار"},
-    {"id": 14, "text": "الخوف من فقدان السيطرة"},
-    {"id": 15, "text": "صعوبة في التنفس"},
-    {"id": 16, "text": "الخوف من الموت"},
-    {"id": 17, "text": "الإحساس بالفزع"},
-    {"id": 18, "text": "اضطراب في المعدة أو عسر الهضم"},
-    {"id": 19, "text": "الإغماء أو الدوار"},
-    {"id": 20, "text": "احمرار الوجه"},
-    {"id": 21, "text": "التعرق الساخن أو البارد"},
+BDI_QUESTIONS = [
+    {"theme_ar": "الحزن", "theme_en": "Sadness", "options": [
+        {"score": 0, "ar": "لا أشعر بالحزن.", "en": "I do not feel sad."},
+        {"score": 1, "ar": "أشعر بالحزن.", "en": "I feel sad."},
+        {"score": 2, "ar": "أشعر بالحزن طوال الوقت ولا أستطيع التخلص منه.", "en": "I am sad all the time and I can't snap out of it."},
+        {"score": 3, "ar": "أشعر بحزن وتعاسة شديدَين لا أحتملهما.", "en": "I am so sad and unhappy that I can't stand it."},
+    ]},
+    {"theme_ar": "التشاؤم", "theme_en": "Pessimism", "options": [
+        {"score": 0, "ar": "لست محبطاً من المستقبل بصفة خاصة.", "en": "I am not particularly discouraged about the future."},
+        {"score": 1, "ar": "أشعر بالإحباط من المستقبل.", "en": "I feel discouraged about the future."},
+        {"score": 2, "ar": "أشعر أنه لا يوجد شيء أتطلع إليه.", "en": "I feel I have nothing to look forward to."},
+        {"score": 3, "ar": "أشعر أن المستقبل ميؤوس منه وأن الأمور لا يمكن أن تتحسن.", "en": "I feel the future is hopeless and that things cannot improve."},
+    ]},
+    {"theme_ar": "الشعور بالفشل", "theme_en": "Sense of Failure", "options": [
+        {"score": 0, "ar": "لا أشعر أنني فاشل.", "en": "I do not feel like a failure."},
+        {"score": 1, "ar": "أشعر أنني فشلت أكثر من الشخص العادي.", "en": "I feel I have failed more than the average person."},
+        {"score": 2, "ar": "حين أنظر إلى حياتي الماضية لا أرى فيها إلا الفشل.", "en": "As I look back on my life, all I can see is a lot of failures."},
+        {"score": 3, "ar": "أشعر أنني إنسان فاشل تماماً.", "en": "I feel I am a complete failure as a person."},
+    ]},
+    {"theme_ar": "فقدان الرضا", "theme_en": "Loss of Satisfaction", "options": [
+        {"score": 0, "ar": "أشعر بالرضا عن الأشياء كما كنت من قبل.", "en": "I get as much satisfaction out of things as I used to."},
+        {"score": 1, "ar": "لا أستمتع بالأشياء كما كنت من قبل.", "en": "I don't enjoy things the way I used to."},
+        {"score": 2, "ar": "لا أحصل على إشباع حقيقي من أي شيء بعد الآن.", "en": "I don't get real satisfaction out of anything anymore."},
+        {"score": 3, "ar": "أشعر بعدم الرضا أو الملل من كل شيء.", "en": "I am dissatisfied or bored with everything."},
+    ]},
+    {"theme_ar": "الشعور بالذنب", "theme_en": "Guilt", "options": [
+        {"score": 0, "ar": "لا أشعر بالذنب بصفة خاصة.", "en": "I don't feel particularly guilty."},
+        {"score": 1, "ar": "أشعر بالذنب في كثير من الأحيان.", "en": "I feel guilty a good part of the time."},
+        {"score": 2, "ar": "أشعر بالذنب معظم الوقت.", "en": "I feel quite guilty most of the time."},
+        {"score": 3, "ar": "أشعر بالذنب طوال الوقت.", "en": "I feel guilty all of the time."},
+    ]},
+    {"theme_ar": "الشعور بالعقاب", "theme_en": "Sense of Punishment", "options": [
+        {"score": 0, "ar": "لا أشعر أنني أُعاقَب.", "en": "I don't feel I am being punished."},
+        {"score": 1, "ar": "أشعر أنه ربما أُعاقَب.", "en": "I feel I may be punished."},
+        {"score": 2, "ar": "أتوقع أن أُعاقَب.", "en": "I expect to be punished."},
+        {"score": 3, "ar": "أشعر أنني أُعاقَب.", "en": "I feel I am being punished."},
+    ]},
+    {"theme_ar": "كره الذات", "theme_en": "Self-Dislike", "options": [
+        {"score": 0, "ar": "لا أشعر بخيبة أمل في نفسي.", "en": "I don't feel disappointed in myself."},
+        {"score": 1, "ar": "أشعر بخيبة أمل في نفسي.", "en": "I am disappointed in myself."},
+        {"score": 2, "ar": "أشعر باشمئزاز من نفسي.", "en": "I am disgusted with myself."},
+        {"score": 3, "ar": "أكره نفسي.", "en": "I hate myself."},
+    ]},
+    {"theme_ar": "لوم الذات", "theme_en": "Self-Accusation", "options": [
+        {"score": 0, "ar": "لا أشعر أنني أسوأ من أي شخص آخر.", "en": "I don't feel I am any worse than anybody else."},
+        {"score": 1, "ar": "أنتقد نفسي بسبب ضعفي وأخطائي.", "en": "I am critical of myself for my weaknesses or mistakes."},
+        {"score": 2, "ar": "أُلوّم نفسي طوال الوقت على عيوبي.", "en": "I blame myself all the time for my faults."},
+        {"score": 3, "ar": "أُلوّم نفسي على كل شيء سيئ يحدث.", "en": "I blame myself for everything bad that happens."},
+    ]},
+    {"theme_ar": "أفكار انتحارية", "theme_en": "Suicidal Ideation", "options": [
+        {"score": 0, "ar": "لا تراودني أي أفكار عن قتل نفسي.", "en": "I don't have any thoughts of killing myself."},
+        {"score": 1, "ar": "تراودني أفكار عن قتل نفسي لكنني لن أنفذها.", "en": "I have thoughts of killing myself, but I would not carry them out."},
+        {"score": 2, "ar": "أريد أن أقتل نفسي.", "en": "I would like to kill myself."},
+        {"score": 3, "ar": "سأقتل نفسي لو سنحت لي الفرصة.", "en": "I would like to kill myself if I had the chance."},
+    ]},
+    {"theme_ar": "البكاء", "theme_en": "Crying", "options": [
+        {"score": 0, "ar": "لا أبكي أكثر من المعتاد.", "en": "I don't cry any more than usual."},
+        {"score": 1, "ar": "أبكي أكثر مما كنت في السابق.", "en": "I cry more now than I used to."},
+        {"score": 2, "ar": "أبكي طوال الوقت الآن.", "en": "I cry all the time now."},
+        {"score": 3, "ar": "كنت أستطيع البكاء من قبل لكنني الآن عاجز عنه حتى لو أردت.", "en": "I used to be able to cry, but now I can't cry even though I want to."},
+    ]},
+    {"theme_ar": "الانفعال والتهيج", "theme_en": "Irritability", "options": [
+        {"score": 0, "ar": "لا أكون أكثر انفعالاً من المعتاد.", "en": "I am no more irritated by things than I ever was."},
+        {"score": 1, "ar": "أكون أكثر انفعالاً قليلاً مما كنت عليه عادةً.", "en": "I am slightly more irritated now than usual."},
+        {"score": 2, "ar": "أشعر بالانزعاج والتهيج كثيراً من الوقت.", "en": "I am quite annoyed or irritated a good deal of the time."},
+        {"score": 3, "ar": "أشعر بالتهيج طوال الوقت.", "en": "I feel irritated all the time."},
+    ]},
+    {"theme_ar": "الانسحاب الاجتماعي", "theme_en": "Social Withdrawal", "options": [
+        {"score": 0, "ar": "لم أفقد اهتمامي بالآخرين.", "en": "I have not lost interest in other people."},
+        {"score": 1, "ar": "اهتمامي بالآخرين أقل مما كان عليه.", "en": "I am less interested in other people than I used to be."},
+        {"score": 2, "ar": "لقد فقدت معظم اهتمامي بالآخرين.", "en": "I have lost most of my interest in other people."},
+        {"score": 3, "ar": "لقد فقدت كل اهتمامي بالآخرين.", "en": "I have lost all of my interest in other people."},
+    ]},
+    {"theme_ar": "التردد في اتخاذ القرار", "theme_en": "Indecisiveness", "options": [
+        {"score": 0, "ar": "أتخذ القرارات بنفس الكفاءة التي كنت عليها.", "en": "I make decisions about as well as I ever could."},
+        {"score": 1, "ar": "أؤجل اتخاذ القرارات أكثر مما كنت في السابق.", "en": "I put off making decisions more than I used to."},
+        {"score": 2, "ar": "أجد صعوبة أكبر في اتخاذ القرارات مقارنةً بالسابق.", "en": "I have greater difficulty in making decisions than before."},
+        {"score": 3, "ar": "لا أستطيع اتخاذ أي قرار على الإطلاق بعد الآن.", "en": "I can't make decisions at all anymore."},
+    ]},
+    {"theme_ar": "صورة الجسم", "theme_en": "Body Image", "options": [
+        {"score": 0, "ar": "لا أشعر أن مظهري أسوأ مما كان عليه.", "en": "I don't feel that I look any worse than I used to."},
+        {"score": 1, "ar": "أخشى أن أبدو شيخاً أو غير جذاب.", "en": "I am worried that I am looking old or unattractive."},
+        {"score": 2, "ar": "أشعر بأن ثمة تغيرات دائمة في مظهري تجعلني أبدو غير جذاب.", "en": "I feel there are permanent changes in my appearance that make me look unattractive."},
+        {"score": 3, "ar": "أعتقد أنني أبدو قبيحاً.", "en": "I believe that I look ugly."},
+    ]},
+    {"theme_ar": "تعطّل القدرة على العمل", "theme_en": "Work Inhibition", "options": [
+        {"score": 0, "ar": "أستطيع العمل بنفس الكفاءة تقريباً كما كنت من قبل.", "en": "I can work about as well as before."},
+        {"score": 1, "ar": "يتطلب مني البدء في فعل أي شيء جهداً إضافياً.", "en": "It takes an extra effort to get started at doing something."},
+        {"score": 2, "ar": "أضطر إلى الدفع الشديد لنفسي لأداء أي شيء.", "en": "I have to push myself very hard to do anything."},
+        {"score": 3, "ar": "لا أستطيع إنجاز أي عمل على الإطلاق.", "en": "I can't do any work at all."},
+    ]},
+    {"theme_ar": "اضطراب النوم", "theme_en": "Sleep Disturbance", "options": [
+        {"score": 0, "ar": "أنام بصورة طبيعية.", "en": "I can sleep as well as usual."},
+        {"score": 1, "ar": "لا أنام بصورة جيدة كما كنت من قبل.", "en": "I don't sleep as well as I used to."},
+        {"score": 2, "ar": "أستيقظ مبكراً بساعة أو ساعتين ويصعب عليّ العودة للنوم.", "en": "I wake up 1-2 hours earlier than usual and find it hard to get back to sleep."},
+        {"score": 3, "ar": "أستيقظ مبكراً بعدة ساعات ولا أستطيع العودة للنوم.", "en": "I wake up several hours earlier than I used to and cannot get back to sleep."},
+    ]},
+    {"theme_ar": "الإجهاد والتعب", "theme_en": "Fatigability", "options": [
+        {"score": 0, "ar": "لا أتعب أكثر من المعتاد.", "en": "I don't get more tired than usual."},
+        {"score": 1, "ar": "أتعب بسهولة أكبر مما كنت عليه من قبل.", "en": "I get tired more easily than I used to."},
+        {"score": 2, "ar": "أتعب من أي شيء تقريباً أفعله.", "en": "I get tired from doing almost anything."},
+        {"score": 3, "ar": "أنا منهك للغاية بحيث لا أستطيع فعل أي شيء.", "en": "I am too tired to do anything."},
+    ]},
+    {"theme_ar": "فقدان الشهية", "theme_en": "Appetite Loss", "options": [
+        {"score": 0, "ar": "شهيتي طبيعية كالمعتاد.", "en": "My appetite is no worse than usual."},
+        {"score": 1, "ar": "شهيتي ليست جيدة كما كانت من قبل.", "en": "My appetite is not as good as it used to be."},
+        {"score": 2, "ar": "شهيتي أسوأ بكثير الآن.", "en": "My appetite is much worse now."},
+        {"score": 3, "ar": "لا أشعر بأي شهية على الإطلاق.", "en": "I have no appetite at all anymore."},
+    ]},
+    {"theme_ar": "فقدان الوزن", "theme_en": "Weight Loss", "options": [
+        {"score": 0, "ar": "لم أفقد وزناً يُذكر مؤخراً.", "en": "I haven't lost much weight, if any, lately."},
+        {"score": 1, "ar": "فقدت أكثر من خمسة أرطال.", "en": "I have lost more than five pounds."},
+        {"score": 2, "ar": "فقدت أكثر من عشرة أرطال.", "en": "I have lost more than ten pounds."},
+        {"score": 3, "ar": "فقدت أكثر من خمسة عشر رطلاً.", "en": "I have lost more than fifteen pounds."},
+    ]},
+    {"theme_ar": "الانشغال بالأمراض الجسدية", "theme_en": "Somatic Preoccupation", "options": [
+        {"score": 0, "ar": "لا أكون أكثر قلقاً على صحتي من المعتاد.", "en": "I am no more worried about my health than usual."},
+        {"score": 1, "ar": "أشعر بالقلق من مشاكل جسدية كالآلام واضطراب المعدة.", "en": "I am worried about physical problems like aches, pains, or upset stomach."},
+        {"score": 2, "ar": "أنا قلق جداً من مشاكل جسدية ويصعب عليّ التفكير في أي شيء آخر.", "en": "I am very worried about physical problems and it's hard to think of much else."},
+        {"score": 3, "ar": "أنا قلق جداً من مشاكلي الجسدية لدرجة أنني لا أستطيع التفكير في أي شيء آخر.", "en": "I am so worried about my physical problems that I cannot think of anything else."},
+    ]},
+    {"theme_ar": "فقدان الرغبة الجنسية", "theme_en": "Loss of Libido", "options": [
+        {"score": 0, "ar": "لم ألاحظ أي تغيير في اهتمامي بالجنس مؤخراً.", "en": "I have not noticed any recent change in my interest in sex."},
+        {"score": 1, "ar": "اهتمامي بالجنس أقل مما كان عليه من قبل.", "en": "I am less interested in sex than I used to be."},
+        {"score": 2, "ar": "اهتمامي بالجنس شبه معدوم الآن.", "en": "I have almost no interest in sex."},
+        {"score": 3, "ar": "فقدت الاهتمام بالجنس كلياً.", "en": "I have lost interest in sex completely."},
+    ]},
 ]
 
-BAI_SCALE = {
-    0: "٠ — لا يوجد على الإطلاق",
-    1: "١ — بدرجة خفيفة، ولم يزعجني كثيراً",
-    2: "٢ — بدرجة متوسطة، كان مزعجاً أحياناً",
-    3: "٣ — بدرجة شديدة، أزعجني كثيراً",
-}
+def calculate_score(answers):
+    return sum(v["score"] for v in answers.values())
 
-# ══════════════════════════════════════════════════════════════
-#  PSWQ — 16 فقرة، مقياس 1–5
-#  الفقرات المعكوسة: 1، 3، 8، 10، 11
-# ══════════════════════════════════════════════════════════════
+def get_severity_level(total):
+    if total <= 10:   return {"label": "Normal / Minimal",              "range": "1-10",  "color": "#4CAF50"}
+    elif total <= 16: return {"label": "Mild Mood Disturbance",          "range": "11-16", "color": "#8BC34A"}
+    elif total <= 20: return {"label": "Borderline Clinical Depression", "range": "17-20", "color": "#FFC107"}
+    elif total <= 30: return {"label": "Moderate Depression",            "range": "21-30", "color": "#FF9800"}
+    elif total <= 40: return {"label": "Severe Depression",              "range": "31-40", "color": "#F44336"}
+    else:             return {"label": "Extreme Depression",             "range": "40+",   "color": "#B71C1C"}
 
-PSWQ_QUESTIONS = [
-    {"id": 1,  "text": "إذا لم يكن لديّ وقت كافٍ لإنجاز كل شيء، فإنني لا أقلق حيال ذلك.",                       "reverse": True},
-    {"id": 2,  "text": "قلقي يطغى عليّ ويسيطر على تفكيري.",                                                        "reverse": False},
-    {"id": 3,  "text": "لا أميل إلى القلق على الأمور.",                                                             "reverse": True},
-    {"id": 4,  "text": "مواقف كثيرة تجعلني أشعر بالقلق.",                                                          "reverse": False},
-    {"id": 5,  "text": "أعلم أنه لا ينبغي لي القلق، لكنني لا أستطيع منع نفسي من ذلك.",                            "reverse": False},
-    {"id": 6,  "text": "حين أكون تحت الضغط، أقلق كثيراً.",                                                         "reverse": False},
-    {"id": 7,  "text": "أنا دائماً قلق بشأن شيء ما.",                                                               "reverse": False},
-    {"id": 8,  "text": "أجد سهولة في التخلص من الأفكار المقلقة.",                                                   "reverse": True},
-    {"id": 9,  "text": "بمجرد أن أنتهي من مهمة، أبدأ في القلق على كل ما تبقى عليّ إنجازه.",                       "reverse": False},
-    {"id": 10, "text": "لا أقلق أبداً على أي شيء.",                                                                 "reverse": True},
-    {"id": 11, "text": "حين لا يعود بإمكاني فعل أي شيء حيال مشكلة ما، أتوقف عن القلق بشأنها.",                   "reverse": True},
-    {"id": 12, "text": "كنت شخصاً قلقاً طوال حياتي.",                                                               "reverse": False},
-    {"id": 13, "text": "ألاحظ أنني أظل قلقاً على أمور كثيرة.",                                                      "reverse": False},
-    {"id": 14, "text": "حين أبدأ بالقلق، لا أستطيع التوقف.",                                                        "reverse": False},
-    {"id": 15, "text": "أقلق في كل وقت.",                                                                            "reverse": False},
-    {"id": 16, "text": "أقلق على المشاريع حتى يتم إنجازها بالكامل.",                                                "reverse": False},
-]
+def get_score_breakdown(answers):
+    COGNITIVE = [1, 2, 3, 5, 6, 7, 8, 12, 13]
+    AFFECTIVE = [0, 4, 9, 10, 11]
+    SOMATIC   = [14, 15, 16, 17, 18, 19, 20]
+    def sub(indices): return sum(answers[i]["score"] for i in indices if i in answers)
+    return {
+        "cognitive_score":         sub(COGNITIVE),
+        "affective_score":         sub(AFFECTIVE),
+        "somatic_score":           sub(SOMATIC),
+        "flagged_items":           [answers[i]["theme_en"] for i in answers if answers[i]["score"] >= 2],
+        "suicidal_ideation_score": answers.get(8, {}).get("score", 0),
+        "item_detail": [
+            {"number": i+1, "theme": answers[i]["theme_en"],
+             "score": answers[i]["score"], "response": answers[i]["text_en"]}
+            for i in sorted(answers.keys())
+        ],
+    }
 
-PSWQ_SCALE = {
-    1: "١ — لا تنطبق عليّ على الإطلاق",
-    2: "٢",
-    3: "٣",
-    4: "٤",
-    5: "٥ — تنطبق عليّ تماماً",
-}
-
-# ══════════════════════════════════════════════════════════════
-#  SCORING
-# ══════════════════════════════════════════════════════════════
-
-def calculate_bai_total(responses: dict) -> int:
-    return sum(responses.values())
-
-def get_bai_level(total: int) -> str:
-    if total <= 21:   return "Low Anxiety"
-    elif total <= 35: return "Moderate Anxiety"
-    else:             return "Potentially Concerning Levels of Anxiety"
-
-def get_bai_color(total: int) -> str:
-    if total <= 21:   return "#5CB85C"
-    elif total <= 35: return "#F0AD4E"
-    else:             return "#D9534F"
-
-def calculate_pswq_total(responses: dict) -> int:
-    total = 0
-    for q in PSWQ_QUESTIONS:
-        raw = responses[q["id"]]
-        scored = (6 - raw) if q["reverse"] else raw
-        total += scored
-    return total
-
-def get_pswq_level(total: int) -> str:
-    if total <= 44:   return "Low Worry"
-    elif total <= 59: return "Moderate Worry"
-    elif total <= 69: return "High Worry"
-    else:             return "Very High Worry"
-
-def get_pswq_color(total: int) -> str:
-    if total <= 44:   return "#5CB85C"
-    elif total <= 59: return "#F0AD4E"
-    elif total <= 69: return "#E07B39"
-    else:             return "#D9534F"
-
-# ══════════════════════════════════════════════════════════════
-#  GROQ REPORT — English, identical to English version
-# ══════════════════════════════════════════════════════════════
-
-def generate_report(client_name: str, bai_total: int, bai_responses: dict,
-                    pswq_total: int, pswq_responses: dict) -> str:
-
-    bai_level  = get_bai_level(bai_total)
-    pswq_level = get_pswq_level(pswq_total)
-
-    BAI_EN = [
-        "Numbness or tingling", "Feeling hot", "Wobbliness in legs",
-        "Unable to relax", "Fear of worst happening", "Dizzy or lightheaded",
-        "Heart pounding / racing", "Unsteady", "Terrified or afraid",
-        "Nervous", "Feeling of choking", "Hands trembling",
-        "Shaky / unsteady", "Fear of losing control", "Difficulty in breathing",
-        "Fear of dying", "Scared", "Indigestion",
-        "Faint / lightheaded", "Face flushed", "Hot / cold sweats",
-    ]
-    PSWQ_EN = [
-        "If I do not have enough time to do everything, I do not worry about it.",
-        "My worries overwhelm me.",
-        "I do not tend to worry about things.",
-        "Many situations make me worry.",
-        "I know I should not worry about things, but I just cannot help it.",
-        "When I am under pressure I worry a lot.",
-        "I am always worrying about something.",
-        "I find it easy to dismiss worrisome thoughts.",
-        "As soon as I finish one task, I start to worry about everything else I have to do.",
-        "I never worry about anything.",
-        "When there is nothing more I can do about a concern, I do not worry about it any more.",
-        "I have been a worrier all my life.",
-        "I notice that I have been worrying about things.",
-        "Once I start worrying, I cannot stop.",
-        "I worry all the time.",
-        "I worry about projects until they are all done.",
-    ]
-
-    bai_items = "\n".join(
-        f"  {BAI_EN[i]}: {bai_responses[q['id']]}/3"
-        for i, q in enumerate(BAI_QUESTIONS)
+def generate_report(client_name, total_score, severity, breakdown, answers):
+    item_lines = "\n".join(
+        f"  Q{item['number']} ({item['theme']}): Score {item['score']} - \"{item['response']}\""
+        for item in breakdown["item_detail"]
     )
-
-    pswq_items = "\n".join(
-        f"  {'[R] ' if q['reverse'] else '      '}{PSWQ_EN[i]}: raw={pswq_responses[q['id']]}, scored={(6 - pswq_responses[q['id']]) if q['reverse'] else pswq_responses[q['id']]}"
-        for i, q in enumerate(PSWQ_QUESTIONS)
-    )
-
-    prompt = f"""You are a licensed clinical psychologist writing a confidential dual-instrument anxiety assessment report.
+    si_note = ""
+    if breakdown["suicidal_ideation_score"] >= 1:
+        si_note = (f"\nIMPORTANT: The client endorsed suicidal ideation at level "
+                   f"{breakdown['suicidal_ideation_score']} on item 9. "
+                   f"This requires explicit risk assessment discussion in the report.")
+    prompt = f"""You are a licensed clinical psychologist writing a confidential professional assessment report.
 
 CLIENT: {client_name}
-DATE: {datetime.datetime.now().strftime("%B %d, %Y")}
+ASSESSMENT: Beck Depression Inventory (BDI-II)
+TOTAL SCORE: {total_score} / 63
+SEVERITY: {severity['label']} (Range: {severity['range']})
 
-════════════════════════════════
-INSTRUMENT 1: Beck Anxiety Inventory (BAI)
-21 items · scale 0–3 · range 0–63
-Total: {bai_total}/63 — {bai_level}
-Scoring: 0–21 Low · 22–35 Moderate · 36–63 Concerning
-Reliability: α=0.92 · test-retest r=0.75
-Reference: Beck et al. (1988), J. Consulting and Clinical Psychology, 56, 893–897.
+DOMAIN SUB-SCORES:
+  Cognitive cluster: {breakdown['cognitive_score']}
+  Affective cluster: {breakdown['affective_score']}
+  Somatic cluster:   {breakdown['somatic_score']}
 
-Item responses:
-{bai_items}
+FLAGGED ITEMS (score 2 or above): {', '.join(breakdown['flagged_items']) if breakdown['flagged_items'] else 'None'}
+{si_note}
 
-════════════════════════════════
-INSTRUMENT 2: Penn State Worry Questionnaire (PSWQ)
-16 items · scale 1–5 · range 16–80 · [R] = reverse scored
-Total: {pswq_total}/80 — {pswq_level}
-Scoring: ≤44 Low · 45–59 Moderate · 60–69 High · 70–80 Very High
-Reliability: α=0.93 · test-retest r=0.92
-Reference: Meyer et al. (1990), Behaviour Research and Therapy, 28, 487–495.
+ITEM-BY-ITEM RESPONSES:
+{item_lines}
 
-Item responses ([R] = reverse scored):
-{pswq_items}
+Write a full professional psychotherapy assessment report with these sections:
+1. REFERRAL AND ASSESSMENT OVERVIEW
+2. PRESENTING PROFILE
+3. DOMAIN ANALYSIS (Cognitive / Affective / Somatic)
+4. ITEM-LEVEL CLINICAL OBSERVATIONS (highlight items scoring 2 or above; address suicidal ideation separately if endorsed)
+5. RISK CONSIDERATIONS
+6. CLINICAL FORMULATION
+7. TREATMENT RECOMMENDATIONS
+8. SUMMARY
 
-════════════════════════════════
-REPORT INSTRUCTIONS:
-
-Write a professional clinical report with these clearly labelled sections.
-
-SECTION A — BECK ANXIETY INVENTORY (BAI)
-
-A1. PRESENTING SYMPTOM PROFILE
-Summarize the overall anxiety presentation from the BAI. Identify dominant symptom clusters (physiological, cognitive, affective) based on the item pattern.
-
-A2. SYMPTOM ANALYSIS
-Group items by cluster. Highlight the most severely endorsed items and their clinical significance. Note any interesting patterns or low-severity items suggesting resilience.
-
-A3. SEVERITY & CLINICAL INTERPRETATION
-Interpret the total score level. Note implications for daily functioning and any items warranting clinical attention.
-
-────────────────────────────────
-SECTION B — PENN STATE WORRY QUESTIONNAIRE (PSWQ)
-
-B1. WORRY PROFILE
-Summarize the worry presentation. Note the total score, level, and key endorsed items.
-
-B2. WORRY PATTERN ANALYSIS
-Identify the nature of worry (pervasive, uncontrollable, situation-specific). Highlight the highest-scoring items. Note any low-scored items indicating protective factors.
-
-B3. SEVERITY & CLINICAL INTERPRETATION
-Interpret the PSWQ score in the context of GAD screening thresholds (scores ≥45 suggest clinically significant worry).
-
-────────────────────────────────
-SECTION C — INTEGRATED ANXIETY PROFILE
-
-C1. CROSS-INSTRUMENT SYNTHESIS
-Synthesize findings from both instruments. Describe how the BAI somatic/physiological picture and the PSWQ cognitive worry pattern interact.
-
-C2. CLINICAL FORMULATION
-Outline a brief formulation: what type of anxiety presentation this pattern suggests and what maintains the anxiety.
-
-C3. THERAPEUTIC IMPLICATIONS
-Evidence-based treatment recommendations from the combined profile. 1 paragraph.
-
-────────────────────────────────
-SECTION D — SUMMARY
-
-One concise paragraph:
-"According to the Beck Anxiety Inventory (BAI), {client_name} self-reports [BAI score]/63, indicating [BAI level], with predominant [symptom clusters]. The Penn State Worry Questionnaire (PSWQ) yields a score of [PSWQ score]/80, indicating [PSWQ level], characterized by [worry pattern]. Taken together, these findings suggest [integrated interpretation]."
-
-────────────────────────────────
-FORMATTING RULES:
-- Use the section labels exactly as above (A1, A2, etc.)
-- No preamble or closing remarks outside the sections
-- No repetition of the same point across sections
-- Clinical, precise language throughout"""
+Use formal clinical language. Reference actual scores and responses. Ready to place in a clinical file."""
 
     api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
         raise ValueError("GROQ_API_KEY is missing from Streamlit secrets.")
-
     response = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": "llama-3.3-70b-versatile",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 3000,
-            "temperature": 0.4,
-        },
-        timeout=90,
+        json={"model": "llama-3.3-70b-versatile",
+              "messages": [{"role": "user", "content": prompt}],
+              "max_tokens": 2000, "temperature": 0.4},
+        timeout=60,
     )
-
     if not response.ok:
         try:    error_detail = response.json()
         except: error_detail = response.text
         raise Exception(f"Groq API error {response.status_code}: {error_detail}")
-
     return response.json()["choices"][0]["message"]["content"].strip()
 
-# ══════════════════════════════════════════════════════════════
-#  PDF — identical to English version
-# ══════════════════════════════════════════════════════════════
+def create_pdf_report(path, client_name, total_score, severity, report_text, answers, timestamp):
+    DARK=colors.HexColor("#1C1917"); WARM=colors.HexColor("#8B7355")
+    ACCENT=colors.HexColor("#C4956A"); LIGHT_BG=colors.HexColor("#F7F3EE")
+    BORDER=colors.HexColor("#DDD5C8"); RED_FLAG=colors.HexColor("#B71C1C")
 
-def create_pdf_report(path, client_name, bai_total, bai_responses,
-                      pswq_total, pswq_responses, report_text, timestamp):
+    def sev_color(label):
+        for k,c in [("Normal","#4CAF50"),("Mild","#8BC34A"),("Borderline","#FFC107"),
+                    ("Moderate","#FF9800"),("Severe","#F44336"),("Extreme","#B71C1C")]:
+            if k.lower() in label.lower(): return colors.HexColor(c)
+        return ACCENT
 
-    DARK   = colors.HexColor("#1C1917")
-    WARM   = colors.HexColor("#6B5B45")
-    LIGHT  = colors.HexColor("#F7F4F0")
-    BORDER = colors.HexColor("#DDD5C8")
-
-    bai_lvl_color  = colors.HexColor(get_bai_color(bai_total))
-    pswq_lvl_color = colors.HexColor(get_pswq_color(pswq_total))
-
-    doc = SimpleDocTemplate(
-        path, pagesize=A4,
-        leftMargin=2.2*cm, rightMargin=2.2*cm,
-        topMargin=2*cm, bottomMargin=2*cm
-    )
-
-    title_s   = ParagraphStyle("T",  fontName="Times-Roman",      fontSize=20, textColor=DARK,  alignment=TA_CENTER, spaceAfter=3)
-    sub_s     = ParagraphStyle("S",  fontName="Times-Italic",      fontSize=10, textColor=WARM,  alignment=TA_CENTER, spaceAfter=2)
-    meta_s    = ParagraphStyle("M",  fontName="Helvetica",         fontSize=8,  textColor=WARM,  alignment=TA_CENTER, spaceAfter=12)
-    section_s = ParagraphStyle("Se", fontName="Helvetica-Bold",    fontSize=10, textColor=WARM,  spaceBefore=12, spaceAfter=4)
-    body_s    = ParagraphStyle("B",  fontName="Helvetica",         fontSize=9.5,textColor=DARK,  leading=15, spaceAfter=5)
-    small_s   = ParagraphStyle("Sm", fontName="Helvetica",         fontSize=8.5,textColor=WARM,  leading=13)
-    footer_s  = ParagraphStyle("Ft", fontName="Helvetica-Oblique", fontSize=7.5,textColor=WARM,  leading=11, alignment=TA_CENTER)
+    doc = SimpleDocTemplate(path, pagesize=A4,
+                            leftMargin=2.5*cm, rightMargin=2.5*cm,
+                            topMargin=2.5*cm, bottomMargin=2.5*cm)
+    title_s  = ParagraphStyle("T",  fontName="Times-Roman",      fontSize=22, textColor=DARK, alignment=TA_CENTER, spaceAfter=4)
+    sub_s    = ParagraphStyle("S",  fontName="Times-Italic",      fontSize=11, textColor=WARM, alignment=TA_CENTER, spaceAfter=2)
+    meta_s   = ParagraphStyle("M",  fontName="Helvetica",         fontSize=8,  textColor=WARM, alignment=TA_CENTER, spaceAfter=14)
+    sec_s    = ParagraphStyle("Se", fontName="Helvetica-Bold",    fontSize=10, textColor=WARM, spaceBefore=14, spaceAfter=4)
+    body_s   = ParagraphStyle("B",  fontName="Helvetica",         fontSize=9.5,textColor=DARK, leading=15, spaceAfter=6)
+    small_s  = ParagraphStyle("Sm", fontName="Helvetica",         fontSize=8.5,textColor=WARM, leading=13)
+    flag_s   = ParagraphStyle("F",  fontName="Helvetica-Bold",    fontSize=9.5,textColor=RED_FLAG, leading=14)
+    footer_s = ParagraphStyle("Ft", fontName="Helvetica-Oblique", fontSize=7.5,textColor=WARM, leading=11, alignment=TA_CENTER)
 
     story = []
     date_str = datetime.datetime.now().strftime("%B %d, %Y  |  %H:%M")
@@ -317,524 +267,164 @@ def create_pdf_report(path, client_name, bai_total, bai_responses,
         try:
             logo = RLImage(LOGO_FILE, width=4*cm, height=2*cm)
             logo.hAlign = "CENTER"
-            story.append(logo)
-            story.append(Spacer(1, 0.3*cm))
-        except Exception:
-            pass
+            story.append(logo); story.append(Spacer(1, 0.3*cm))
+        except: pass
 
-    story.append(Paragraph("Anxiety Assessment Report", title_s))
-    story.append(Spacer(1, 0.5*cm))
-    story.append(Paragraph("Beck Anxiety Inventory  ·  Penn State Worry Questionnaire", sub_s))
-    story.append(Paragraph(f"CONFIDENTIAL  ·  {date_str}", meta_s))
-    story.append(HRFlowable(width="100%", thickness=1, color=BORDER))
-    story.append(Spacer(1, 0.3*cm))
+    story += [Paragraph("Beck Depression Inventory", title_s), Spacer(1,0.3*cm),
+              Paragraph("Clinical Assessment Report", sub_s),
+              Paragraph(f"CONFIDENTIAL  ·  {date_str}", meta_s),
+              HRFlowable(width="100%", thickness=1, color=BORDER), Spacer(1,0.4*cm)]
 
+    # Fixed bar
+    bar_filled = max(0, min(30, int((total_score / 63) * 30)))
+    hex_sev = severity["color"].lstrip("#")
     info_data = [
         [Paragraph("<b>Client</b>", small_s), Paragraph(client_name, body_s),
-         Paragraph("<b>Assessments</b>", small_s), Paragraph("BAI (21 items) · PSWQ (16 items)", body_s)],
-        [Paragraph("<b>Date</b>", small_s), Paragraph(date_str, body_s),
-         Paragraph("<b>Score Ranges</b>", small_s), Paragraph("BAI: 0–63  |  PSWQ: 16–80", body_s)],
+         Paragraph("<b>Total Score</b>", small_s), Paragraph(f"<b>{total_score} / 63</b>", body_s)],
+        [Paragraph("<b>Assessment</b>", small_s), Paragraph("BDI-II", body_s),
+         Paragraph("<b>Severity</b>", small_s),
+         Paragraph(f"<b>{severity['label']}</b>",
+                   ParagraphStyle("SL", fontName="Helvetica-Bold", fontSize=9.5, textColor=sev_color(severity['label'])))],
+        [Paragraph("<b>Score Bar</b>", small_s),
+         Paragraph(f'<font color="#{hex_sev}">{"█"*bar_filled}</font><font color="#CCCCCC">{"░"*(30-bar_filled)}</font>',
+                   ParagraphStyle("BR", fontName="Courier", fontSize=8, leading=12)),
+         Paragraph("<b>Range</b>", small_s), Paragraph(severity["range"], body_s)],
     ]
-    it = Table(info_data, colWidths=[3*cm, 6*cm, 3.5*cm, 4.5*cm])
-    it.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), LIGHT),
-        ("BOX",           (0,0),(-1,-1), 0.5, BORDER),
-        ("INNERGRID",     (0,0),(-1,-1), 0.3, BORDER),
-        ("TOPPADDING",    (0,0),(-1,-1), 8),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 8),
-        ("LEFTPADDING",   (0,0),(-1,-1), 10),
+    info_t = Table(info_data, colWidths=[3*cm, 6.5*cm, 3*cm, 4.5*cm])
+    info_t.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),LIGHT_BG),("BOX",(0,0),(-1,-1),0.5,BORDER),
+        ("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),("LEFTPADDING",(0,0),(-1,-1),10),
     ]))
-    story.append(it)
-    story.append(Spacer(1, 0.4*cm))
+    story += [info_t, Spacer(1,0.5*cm)]
 
-    story.append(Paragraph("SCORE SUMMARY", section_s))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
-    story.append(Spacer(1, 0.2*cm))
+    story += [Paragraph("ITEM RESPONSES", sec_s),
+              HRFlowable(width="100%", thickness=0.5, color=BORDER), Spacer(1,0.2*cm)]
 
-    def bar(score, max_score, width=30):
-        filled = max(0, min(width, int((score / max_score) * width)))
-        return "█" * filled + "░" * (width - filled)
-
-    summary_header = [
-        Paragraph("<b>Instrument</b>", small_s),
-        Paragraph("<b>Score</b>",      small_s),
-        Paragraph("<b>Level</b>",      small_s),
-        Paragraph("<b>Range Bar</b>",  small_s),
-    ]
-    summary_rows = [summary_header, [
-        Paragraph("<b>Beck Anxiety Inventory (BAI)</b>",
-                  ParagraphStyle("bi", fontName="Helvetica-Bold", fontSize=9, textColor=bai_lvl_color)),
-        Paragraph(f"<b>{bai_total}/63</b>",
-                  ParagraphStyle("bs", fontName="Helvetica-Bold", fontSize=9, textColor=bai_lvl_color, alignment=TA_CENTER)),
-        Paragraph(get_bai_level(bai_total),
-                  ParagraphStyle("bl", fontName="Helvetica", fontSize=8.5, textColor=bai_lvl_color)),
-        Paragraph(f'<font color="{get_bai_color(bai_total)}">{bar(bai_total, 63)}</font>',
-                  ParagraphStyle("bb", fontName="Courier", fontSize=7)),
-    ], [
-        Paragraph("<b>Penn State Worry Questionnaire (PSWQ)</b>",
-                  ParagraphStyle("pi", fontName="Helvetica-Bold", fontSize=9, textColor=pswq_lvl_color)),
-        Paragraph(f"<b>{pswq_total}/80</b>",
-                  ParagraphStyle("ps", fontName="Helvetica-Bold", fontSize=9, textColor=pswq_lvl_color, alignment=TA_CENTER)),
-        Paragraph(get_pswq_level(pswq_total),
-                  ParagraphStyle("pl", fontName="Helvetica", fontSize=8.5, textColor=pswq_lvl_color)),
-        Paragraph(f'<font color="{get_pswq_color(pswq_total)}">{bar(pswq_total, 80)}</font>',
-                  ParagraphStyle("pb", fontName="Courier", fontSize=7)),
-    ]]
-
-    sum_table = Table(summary_rows, colWidths=[5.5*cm, 2*cm, 4.5*cm, 5*cm])
-    sum_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,0),  colors.HexColor("#EDE9E3")),
-        ("BACKGROUND",    (0,2),(-1,2),  LIGHT),
-        ("BOX",           (0,0),(-1,-1), 0.5, BORDER),
-        ("INNERGRID",     (0,0),(-1,-1), 0.3, BORDER),
-        ("TOPPADDING",    (0,0),(-1,-1), 8),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 8),
-        ("LEFTPADDING",   (0,0),(-1,-1), 8),
-        ("ALIGN",         (1,0),(1,-1),  "CENTER"),
-    ]))
-    story.append(sum_table)
-    story.append(Spacer(1, 0.4*cm))
-
-    # ── BAI item table ────────────────────────────────────────
-    story.append(Paragraph("BECK ANXIETY INVENTORY — ITEM RESPONSES", section_s))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
-    story.append(Spacer(1, 0.2*cm))
-
-    SCORE_LABELS = {0: "Not at all", 1: "Mildly", 2: "Moderately", 3: "Severely"}
-    SCORE_COLORS = {
-        0: colors.HexColor("#5CB85C"), 1: colors.HexColor("#F0AD4E"),
-        2: colors.HexColor("#E07B39"), 3: colors.HexColor("#D9534F"),
-    }
-
-    bai_header = [
-        Paragraph("<b>#</b>",        small_s),
-        Paragraph("<b>Symptom</b>",  small_s),
-        Paragraph("<b>Score</b>",    small_s),
-        Paragraph("<b>Severity</b>", small_s),
-    ]
-    bai_rows = [bai_header]
-
-    # Map Arabic symptom text back to English for the PDF
-    BAI_EN = [
-        "Numbness or tingling", "Feeling hot", "Wobbliness in legs",
-        "Unable to relax", "Fear of worst happening", "Dizzy or lightheaded",
-        "Heart pounding / racing", "Unsteady", "Terrified or afraid",
-        "Nervous", "Feeling of choking", "Hands trembling",
-        "Shaky / unsteady", "Fear of losing control", "Difficulty in breathing",
-        "Fear of dying", "Scared", "Indigestion",
-        "Faint / lightheaded", "Face flushed", "Hot / cold sweats",
-    ]
-
-    for idx, q in enumerate(BAI_QUESTIONS):
-        sc = bai_responses[q["id"]]
-        sc_col = SCORE_COLORS[sc]
-        bai_rows.append([
-            Paragraph(str(q["id"]),
-                      ParagraphStyle("in", fontName="Helvetica", fontSize=8.5, textColor=WARM, alignment=TA_CENTER)),
-            Paragraph(BAI_EN[idx], body_s),
-            Paragraph(f"<b>{sc}</b>",
-                      ParagraphStyle("is", fontName="Helvetica-Bold", fontSize=9, textColor=sc_col, alignment=TA_CENTER)),
-            Paragraph(SCORE_LABELS[sc],
-                      ParagraphStyle("il", fontName="Helvetica", fontSize=8.5, textColor=sc_col)),
+    rows = [[Paragraph("<b>#</b>",small_s), Paragraph("<b>Domain</b>",small_s),
+             Paragraph("<b>Response Selected</b>",small_s), Paragraph("<b>Score</b>",small_s)]]
+    for i in sorted(answers.keys()):
+        a=answers[i]; sv=a["score"]
+        rows.append([
+            Paragraph(str(i+1), small_s),
+            Paragraph(a["theme_en"], small_s),
+            Paragraph(a["text_en"], ParagraphStyle("RC",fontName="Helvetica",fontSize=8.5,textColor=DARK,leading=12)),
+            Paragraph(f"<b>{sv}</b>", ParagraphStyle("SC",fontName="Helvetica-Bold",fontSize=9,
+                      textColor=RED_FLAG if sv>=2 else DARK,alignment=TA_CENTER)),
         ])
-
-    bai_table = Table(bai_rows, colWidths=[1.2*cm, 8.5*cm, 1.8*cm, 5.5*cm])
-    bai_styles = [
-        ("BACKGROUND",    (0,0),(-1,0),  colors.HexColor("#EDE9E3")),
-        ("BOX",           (0,0),(-1,-1), 0.5, BORDER),
-        ("INNERGRID",     (0,0),(-1,-1), 0.3, BORDER),
-        ("TOPPADDING",    (0,0),(-1,-1), 5),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
-        ("LEFTPADDING",   (0,0),(-1,-1), 6),
-        ("ALIGN",         (0,0),(0,-1),  "CENTER"),
-        ("ALIGN",         (2,0),(2,-1),  "CENTER"),
+    tstyle = [
+        ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#EDE9E3")),
+        ("BOX",(0,0),(-1,-1),0.5,BORDER),("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+        ("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5),
+        ("LEFTPADDING",(0,0),(-1,-1),6),("ALIGN",(3,0),(3,-1),"CENTER"),
     ]
-    for i in range(1, len(bai_rows)):
-        if i % 2 == 0:
-            bai_styles.append(("BACKGROUND", (0,i),(-1,i), LIGHT))
-    bai_table.setStyle(TableStyle(bai_styles))
-    story.append(bai_table)
-    story.append(Spacer(1, 0.5*cm))
+    for row_idx, i in enumerate(sorted(answers.keys()), start=1):
+        if answers[i]["score"] >= 2:
+            tstyle.append(("BACKGROUND",(0,row_idx),(-1,row_idx),colors.HexColor("#FFF3F3")))
+    t = Table(rows, colWidths=[1*cm,3.5*cm,11*cm,1.5*cm])
+    t.setStyle(TableStyle(tstyle))
+    story += [t, Spacer(1,0.5*cm)]
 
-    # ── PSWQ item table ───────────────────────────────────────
-    story.append(Paragraph("PENN STATE WORRY QUESTIONNAIRE — ITEM RESPONSES", section_s))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
-    story.append(Spacer(1, 0.2*cm))
-
-    PSWQ_EN = [
-        "If I do not have enough time to do everything, I do not worry about it.",
-        "My worries overwhelm me.",
-        "I do not tend to worry about things.",
-        "Many situations make me worry.",
-        "I know I should not worry about things, but I just cannot help it.",
-        "When I am under pressure I worry a lot.",
-        "I am always worrying about something.",
-        "I find it easy to dismiss worrisome thoughts.",
-        "As soon as I finish one task, I start to worry about everything else I have to do.",
-        "I never worry about anything.",
-        "When there is nothing more I can do about a concern, I do not worry about it any more.",
-        "I have been a worrier all my life.",
-        "I notice that I have been worrying about things.",
-        "Once I start worrying, I cannot stop.",
-        "I worry all the time.",
-        "I worry about projects until they are all done.",
-    ]
-
-    pswq_header = [
-        Paragraph("<b>#</b>",         small_s),
-        Paragraph("<b>Statement</b>", small_s),
-        Paragraph("<b>Raw</b>",       small_s),
-        Paragraph("<b>Scored</b>",    small_s),
-    ]
-    pswq_rows = [pswq_header]
-
-    def pswq_score_color(scored):
-        if scored <= 2:   return colors.HexColor("#5CB85C")
-        elif scored == 3: return colors.HexColor("#F0AD4E")
-        elif scored == 4: return colors.HexColor("#E07B39")
-        else:             return colors.HexColor("#D9534F")
-
-    for idx, q in enumerate(PSWQ_QUESTIONS):
-        raw    = pswq_responses[q["id"]]
-        scored = (6 - raw) if q["reverse"] else raw
-        sc_col = pswq_score_color(scored)
-        rev_tag = " <i>[R]</i>" if q["reverse"] else ""
-        pswq_rows.append([
-            Paragraph(str(q["id"]),
-                      ParagraphStyle("pn", fontName="Helvetica", fontSize=8.5, textColor=WARM, alignment=TA_CENTER)),
-            Paragraph(PSWQ_EN[idx] + rev_tag,
-                      ParagraphStyle("pt", fontName="Helvetica", fontSize=9, textColor=DARK, leading=13)),
-            Paragraph(str(raw),
-                      ParagraphStyle("pr", fontName="Helvetica", fontSize=9, textColor=WARM, alignment=TA_CENTER)),
-            Paragraph(f"<b>{scored}</b>",
-                      ParagraphStyle("ps2", fontName="Helvetica-Bold", fontSize=9, textColor=sc_col, alignment=TA_CENTER)),
-        ])
-
-    pswq_table = Table(pswq_rows, colWidths=[1.2*cm, 10*cm, 1.5*cm, 2.3*cm])
-    pswq_styles = [
-        ("BACKGROUND",    (0,0),(-1,0),  colors.HexColor("#EDE9E3")),
-        ("BOX",           (0,0),(-1,-1), 0.5, BORDER),
-        ("INNERGRID",     (0,0),(-1,-1), 0.3, BORDER),
-        ("TOPPADDING",    (0,0),(-1,-1), 5),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
-        ("LEFTPADDING",   (0,0),(-1,-1), 6),
-        ("ALIGN",         (0,0),(0,-1),  "CENTER"),
-        ("ALIGN",         (2,0),(3,-1),  "CENTER"),
-    ]
-    for i in range(1, len(pswq_rows)):
-        if i % 2 == 0:
-            pswq_styles.append(("BACKGROUND", (0,i),(-1,i), LIGHT))
-    pswq_table.setStyle(TableStyle(pswq_styles))
-    story.append(pswq_table)
-
-    story.append(Spacer(1, 0.2*cm))
-    story.append(Paragraph(
-        "<i>[R] = reverse scored item. Scored value reflects the transformed score used in the total.</i>",
-        ParagraphStyle("note", fontName="Helvetica-Oblique", fontSize=7.5, textColor=WARM)
-    ))
-    story.append(Spacer(1, 0.5*cm))
-
-    # ── Clinical report ───────────────────────────────────────
-    story.append(HRFlowable(width="100%", thickness=1, color=BORDER))
-    story.append(Spacer(1, 0.2*cm))
-    story.append(Paragraph("CLINICAL REPORT", section_s))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
-    story.append(Spacer(1, 0.2*cm))
-
+    story += [HRFlowable(width="100%",thickness=1,color=BORDER), Spacer(1,0.3*cm),
+              Paragraph("CLINICAL REPORT", sec_s),
+              HRFlowable(width="100%",thickness=0.5,color=BORDER), Spacer(1,0.2*cm)]
     for line in report_text.split("\n"):
         line = line.strip()
-        if not line:
-            story.append(Spacer(1, 0.18*cm))
-        elif line.isupper() or (line.endswith(":") and len(line) < 70) or (
-            line[:3] in ("A1.", "A2.", "A3.", "B1.", "B2.", "B3.", "C1.", "C2.", "C3.", "D. ", "D —")
-            or line.startswith("SECTION")
-        ):
-            story.append(Paragraph(line, section_s))
-        else:
-            story.append(Paragraph(line, body_s))
+        if not line: story.append(Spacer(1,0.2*cm))
+        elif line.isupper() or (line.endswith(":") and len(line)<60): story.append(Paragraph(line,sec_s))
+        elif "suicidal" in line.lower(): story.append(Paragraph(line,flag_s))
+        else: story.append(Paragraph(line,body_s))
 
-    story.append(Spacer(1, 0.5*cm))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
-    story.append(Spacer(1, 0.2*cm))
-    story.append(Paragraph(
-        "This report is strictly confidential and intended solely for the treating clinician. "
-        "Not to be shared without explicit written consent. "
-        "AI-assisted analysis should be reviewed alongside clinical judgment.",
-        footer_s
-    ))
+    story += [Spacer(1,0.6*cm), HRFlowable(width="100%",thickness=0.5,color=BORDER), Spacer(1,0.2*cm),
+              Paragraph("This report is strictly confidential and intended solely for the treating clinician. "
+                        "It is not to be shared with the client or any third party without explicit written consent. "
+                        "AI-assisted analysis should be reviewed in conjunction with clinical judgment.", footer_s)]
     doc.build(story)
 
-# ══════════════════════════════════════════════════════════════
-#  EMAIL
-# ══════════════════════════════════════════════════════════════
-
-def send_report_email(pdf_path, client_name, bai_total, pswq_total, filename):
-    date_str   = datetime.datetime.now().strftime("%B %d, %Y at %H:%M")
-    bai_color  = get_bai_color(bai_total)
-    pswq_color = get_pswq_color(pswq_total)
-
+def send_report_email(pdf_path, client_name, total_score, severity, filename):
+    date_str = datetime.datetime.now().strftime("%B %d, %Y at %H:%M")
     msg = MIMEMultipart("mixed")
-    msg["From"]    = GMAIL_ADDRESS
-    msg["To"]      = THERAPIST_EMAIL
-    msg["Subject"] = f"[Anxiety Report] {client_name} — {date_str}"
-
-    body_html = f"""
-    <html><body style="font-family:Georgia,serif;color:#1C1917;background:#F7F4F0;padding:24px;">
-      <div style="max-width:580px;margin:0 auto;background:white;border:1px solid #DDD5C8;border-radius:4px;padding:32px;">
-        <h2 style="font-weight:300;font-size:22px;margin-bottom:2px;">Anxiety Assessment Report</h2>
-        <p style="color:#6B5B45;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;margin-top:0;">
-          BAI · PSWQ — New Submission
-        </p>
-        <hr style="border:none;border-top:1px solid #DDD5C8;margin:18px 0;">
+    msg["From"]=GMAIL_ADDRESS; msg["To"]=THERAPIST_EMAIL
+    msg["Subject"]=f"[BDI Report] {client_name} — {severity['label']} (Score: {total_score}/63) — {date_str}"
+    body_html = f"""<html><body style="font-family:Georgia,serif;color:#1C1917;background:#F7F3EE;padding:24px;">
+      <div style="max-width:560px;margin:0 auto;background:white;border:1px solid #DDD5C8;border-radius:4px;padding:32px;">
+        <h2 style="font-weight:300;font-size:22px;margin-bottom:4px;">Beck Depression Inventory</h2>
+        <p style="color:#8B7355;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-top:0;">New Assessment Submitted</p>
+        <hr style="border:none;border-top:1px solid #DDD5C8;margin:20px 0;">
         <table style="width:100%;font-size:14px;border-collapse:collapse;">
-          <tr><td style="padding:6px 0;color:#6B5B45;width:40%;">Client</td><td><strong>{client_name}</strong></td></tr>
-          <tr><td style="padding:6px 0;color:#6B5B45;">Date &amp; Time</td><td>{date_str}</td></tr>
+          <tr><td style="padding:8px 0;color:#8B7355;width:40%;">Client</td><td><strong>{client_name}</strong></td></tr>
+          <tr><td style="padding:8px 0;color:#8B7355;">Date &amp; Time</td><td>{date_str}</td></tr>
+          <tr><td style="padding:8px 0;color:#8B7355;">Total Score</td><td><strong>{total_score} / 63</strong></td></tr>
+          <tr><td style="padding:8px 0;color:#8B7355;">Severity</td>
+              <td><strong style="color:{severity['color']};">{severity['label']}</strong></td></tr>
         </table>
-        <hr style="border:none;border-top:1px solid #DDD5C8;margin:18px 0;">
-        <p style="font-size:13px;color:#6B5B45;margin-bottom:8px;font-weight:bold;">Assessment Results</p>
-        <table style="width:100%;font-size:13px;border-collapse:collapse;">
-          <tr>
-            <td style="padding:6px 0;color:#6B5B45;width:50%;">BAI Total Score</td>
-            <td><strong style="color:{bai_color};">{bai_total}/63 — {get_bai_level(bai_total)}</strong></td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;color:#6B5B45;">PSWQ Total Score</td>
-            <td><strong style="color:{pswq_color};">{pswq_total}/80 — {get_pswq_level(pswq_total)}</strong></td>
-          </tr>
-        </table>
-        <hr style="border:none;border-top:1px solid #DDD5C8;margin:18px 0;">
-        <p style="font-size:13px;line-height:1.6;">The full clinical report is attached as a PDF.</p>
-        <p style="font-size:11px;color:#6B5B45;margin-top:20px;font-style:italic;">
-          Confidential — intended only for the treating clinician.</p>
-      </div>
-    </body></html>"""
-
+        <hr style="border:none;border-top:1px solid #DDD5C8;margin:20px 0;">
+        <p style="font-size:13px;line-height:1.6;">Full clinical report attached as PDF.</p>
+        <p style="font-size:11px;color:#8B7355;margin-top:24px;font-style:italic;">Confidential — intended only for the treating clinician.</p>
+      </div></body></html>"""
     msg.attach(MIMEText(body_html, "html"))
     with open(pdf_path, "rb") as f:
-        part = MIMEBase("application", "octet-stream")
-        part.set_payload(f.read())
+        part = MIMEBase("application","octet-stream"); part.set_payload(f.read())
     encoders.encode_base64(part)
     part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
     msg.attach(part)
-
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_ADDRESS, GMAIL_PASSWORD)
         server.sendmail(GMAIL_ADDRESS, THERAPIST_EMAIL, msg.as_string())
 
-# ══════════════════════════════════════════════════════════════
-#  STREAMLIT UI — Arabic interface
-# ══════════════════════════════════════════════════════════════
-
-st.set_page_config(
-    page_title="تقييم القلق",
-    page_icon="🧠",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
+st.set_page_config(page_title="تقييم الاكتئاب", page_icon="🧠",
+                   layout="centered", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Jost:wght@300;400;500&display=swap');
+:root{--cream:#F7F3EE;--deep:#1C1917;--warm:#8B7355;--accent:#C4956A;--border:#DDD5C8;--selected:#2D2926;}
+#MainMenu{visibility:hidden!important;display:none!important;}
+header[data-testid="stHeader"]{visibility:hidden!important;display:none!important;}
+footer{visibility:hidden!important;display:none!important;}
+[data-testid="stToolbar"]{display:none!important;}
+[data-testid="stDecoration"]{display:none!important;}
+[data-testid="stStatusWidget"]{display:none!important;}
+[data-testid="stActionButton"]{display:none!important;}
+a[href*="streamlit.io"]{display:none!important;}
+[class*="viewerBadge"]{display:none!important;}
+[class*="ProfileBadge"]{display:none!important;}
+html,body,[data-theme="dark"],[data-theme="light"]{color-scheme:light only!important;}
+[data-testid="stAppViewContainer"],.stApp{background-color:#F7F3EE!important;color:#1C1917!important;}
+html,body,[class*="css"]{font-family:'Jost',sans-serif;background-color:var(--cream);color:var(--deep);direction:rtl;}
+.stApp{background-color:var(--cream);}
+.assessment-header{text-align:center;padding:3rem 0 2rem 0;border-bottom:1px solid var(--border);margin-bottom:2.5rem;direction:rtl;}
+.assessment-header h1{font-family:'Cormorant Garamond',serif;font-size:2.4rem;font-weight:300;letter-spacing:.02em;margin-bottom:.4rem;}
+.assessment-header p{color:var(--warm);font-size:.85rem;font-weight:300;letter-spacing:.06em;}
+.question-block{background:white;border:1px solid var(--border);border-radius:4px;padding:1.8rem 2rem;margin-bottom:1.2rem;transition:border-color .2s ease;direction:rtl;text-align:right;}
+.question-block:hover{border-color:var(--accent);}
+.question-number{font-size:.72rem;font-weight:500;letter-spacing:.08em;color:var(--accent);margin-bottom:.5rem;}
+.question-text{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:400;color:var(--deep);margin-bottom:1.2rem;line-height:1.6;}
+div[data-testid="stRadio"]>label{display:none;}
+div[data-testid="stRadio"]>div{gap:.5rem!important;flex-direction:column!important;}
+div[data-testid="stRadio"]>div>label{background:var(--cream)!important;border:1px solid var(--border)!important;border-radius:20px!important;padding:.6rem 1rem!important;cursor:pointer!important;transition:all .15s ease!important;font-size:.88rem!important;color:var(--deep)!important;font-family:'Jost',sans-serif!important;width:100%!important;text-align:right!important;direction:rtl!important;}
+div[data-testid="stRadio"]>div>label:hover{border-color:var(--accent)!important;background:#FDF9F4!important;}
+.progress-bar-wrapper{background:var(--border);border-radius:2px;height:3px;margin-bottom:2rem;}
+.progress-bar-fill{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--warm),var(--accent));}
+.stButton>button{background:var(--selected)!important;color:var(--cream)!important;border:none!important;padding:.85rem 3rem!important;font-family:'Jost',sans-serif!important;font-size:.85rem!important;font-weight:400!important;letter-spacing:.08em!important;border-radius:2px!important;transition:background .2s ease!important;}
+.stButton>button:hover{background:var(--warm)!important;}
+.thank-you-block{text-align:center;padding:5rem 2rem;direction:rtl;}
+.thank-you-block h2{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:300;margin-bottom:1rem;}
+.thank-you-block p{color:var(--warm);font-size:.95rem;font-weight:300;max-width:400px;margin:0 auto;line-height:1.9;}
+div[data-testid="stTextInput"] input{background:white!important;border:1px solid var(--border)!important;border-radius:3px!important;font-family:'Jost',sans-serif!important;color:var(--deep)!important;}
+</style>""", unsafe_allow_html=True)
 
-:root {
-    --bg: #F7F4F0;
-    --white: #FFFFFF;
-    --deep: #1C1917;
-    --warm: #6B5B45;
-    --accent: #8B6F47;
-    --border: #DDD5C8;
-    --selected: #2D2926;
-}
-
-/* ── Hide Streamlit chrome ── */
-#MainMenu { visibility: hidden !important; display: none !important; }
-header[data-testid="stHeader"] { visibility: hidden !important; display: none !important; }
-footer { visibility: hidden !important; display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
-[data-testid="stDecoration"] { display: none !important; }
-[data-testid="stStatusWidget"] { display: none !important; }
-[data-testid="stActionButton"] { display: none !important; }
-a[href*="streamlit.io"] { display: none !important; }
-a[href*="share.streamlit.io"] { display: none !important; }
-.viewerBadge_container__r5tak { display: none !important; }
-.viewerBadge_link__qRIco { display: none !important; }
-.styles_viewerBadge__CvC9N { display: none !important; }
-[class*="viewerBadge"] { display: none !important; }
-[class*="ProfileBadge"] { display: none !important; }
-#stDecoration { display: none !important; }
-
-/* ── Force light mode ── */
-html, body, [data-theme="dark"], [data-theme="light"] { color-scheme: light only !important; }
-[data-testid="stAppViewContainer"], .stApp {
-    background-color: #F7F4F0 !important;
-    color: #1C1917 !important;
-}
-
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-    background-color: var(--bg);
-    color: var(--deep);
-    direction: rtl;
-}
-.stApp { background-color: var(--bg); }
-
-.page-header {
-    text-align: center;
-    padding: 2.5rem 0 2rem 0;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 2rem;
-    direction: rtl;
-}
-.page-header h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.2rem;
-    font-weight: 400;
-    margin-bottom: 0.3rem;
-    color: var(--deep);
-}
-.page-header p {
-    color: var(--warm);
-    font-size: 0.82rem;
-    letter-spacing: 0.06em;
-    font-weight: 400;
-}
-
-.section-divider {
-    text-align: center;
-    padding: 1.5rem 0 1rem 0;
-    border-bottom: 1px solid var(--border);
-    margin: 2rem 0 1.5rem 0;
-    direction: rtl;
-}
-.section-divider h2 {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.6rem;
-    font-weight: 400;
-    color: var(--deep);
-    margin-bottom: 0.2rem;
-}
-.section-divider p {
-    color: var(--warm);
-    font-size: 0.78rem;
-    letter-spacing: 0.06em;
-}
-
-.question-card {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1.5rem 1.8rem 0.5rem 1.8rem;
-    margin-bottom: 1rem;
-    transition: border-color 0.2s;
-    direction: rtl;
-    text-align: right;
-}
-.question-card:hover { border-color: var(--accent); }
-
-.q-number {
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    color: var(--accent);
-    margin-bottom: 0.3rem;
-    font-weight: 500;
-}
-.q-text {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.05rem;
-    color: var(--deep);
-    margin-bottom: 1rem;
-    line-height: 1.6;
-}
-
-div[data-testid="stRadio"] > label { display: none; }
-div[data-testid="stRadio"] > div {
-    gap: 0.4rem !important;
-    flex-direction: row-reverse !important;
-    flex-wrap: wrap !important;
-    justify-content: flex-start !important;
-}
-div[data-testid="stRadio"] > div > label {
-    background: var(--bg) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 20px !important;
-    padding: 0.45rem 0.9rem !important;
-    cursor: pointer !important;
-    font-size: 0.82rem !important;
-    color: var(--deep) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    transition: all 0.15s ease !important;
-    white-space: nowrap !important;
-}
-div[data-testid="stRadio"] > div > label:hover {
-    border-color: var(--accent) !important;
-    background: #F0EBE3 !important;
-}
-
-.progress-wrap { background: var(--border); border-radius: 2px; height: 3px; margin: 1.5rem 0 0.5rem 0; }
-.progress-fill { height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--warm), var(--accent)); }
-
-.stButton > button {
-    background: var(--selected) !important;
-    color: var(--bg) !important;
-    border: none !important;
-    padding: 0.8rem 2.8rem !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.83rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.08em !important;
-    border-radius: 2px !important;
-    transition: background 0.2s ease !important;
-}
-.stButton > button:hover { background: var(--warm) !important; }
-
-.thank-you {
-    text-align: center;
-    padding: 5rem 2rem;
-    direction: rtl;
-}
-.thank-you h2 {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.2rem;
-    font-weight: 400;
-    margin-bottom: 1rem;
-}
-.thank-you p {
-    color: var(--warm);
-    font-size: 0.95rem;
-    max-width: 400px;
-    margin: 0 auto;
-    line-height: 1.9;
-}
-
-div[data-testid="stTextInput"] input {
-    background: white !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 3px !important;
-    font-family: 'DM Sans', sans-serif !important;
-    color: var(--deep) !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ── Routing ────────────────────────────────────────────────────────────────────
 page = st.query_params.get("page", "client")
 
 if page == "admin":
-    st.markdown("""
-    <div class="page-header">
-        <p>بوابة المعالج</p>
-        <h1>التقارير المحفوظة</h1>
-    </div>""", unsafe_allow_html=True)
-
-    if "admin_auth" not in st.session_state:
-        st.session_state.admin_auth = False
-
-    if not st.session_state.admin_auth:
+    st.markdown('<div class="assessment-header"><p>بوابة المعالج</p><h1>التقارير المحفوظة</h1></div>', unsafe_allow_html=True)
+    if "admin_authenticated" not in st.session_state:
+        st.session_state.admin_authenticated = False
+    if not st.session_state.admin_authenticated:
         pwd = st.text_input("كلمة المرور", type="password", placeholder="أدخل كلمة المرور")
         if st.button("دخول"):
             if pwd == st.secrets.get("ADMIN_PASSWORD", ""):
-                st.session_state.admin_auth = True
-                st.rerun()
+                st.session_state.admin_authenticated = True; st.rerun()
             else:
                 st.error("كلمة المرور غير صحيحة.")
     else:
@@ -847,192 +437,119 @@ if page == "admin":
             st.markdown(f"**{len(files)} تقرير محفوظ**")
             for fname in files:
                 col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"📄 `{fname}`")
+                with col1: st.markdown(f"📄 `{fname}`")
                 with col2:
                     with open(os.path.join(reports_dir, fname), "rb") as f:
-                        st.download_button("تحميل", data=f, file_name=fname,
-                                           mime="application/pdf", key=fname)
+                        st.download_button("تحميل", data=f, file_name=fname, mime="application/pdf", key=fname)
         if st.button("تسجيل الخروج"):
-            st.session_state.admin_auth = False
-            st.rerun()
+            st.session_state.admin_authenticated = False; st.rerun()
 
 else:
-    if "submitted" not in st.session_state:
-        st.session_state.submitted = False
+    if "submitted"      not in st.session_state: st.session_state.submitted = False
+    if "access_granted" not in st.session_state: st.session_state.access_granted = False
+
+    # ── Access code gate ───────────────────────────────────────
+    if not st.session_state.access_granted:
+        if os.path.exists(LOGO_FILE):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2: st.image(LOGO_FILE, use_container_width=True)
+        st.markdown("""<div class="assessment-header">
+            <p>تقييم نفسي سري</p>
+            <h1>مقياس بيك للاكتئاب</h1>
+        </div>""", unsafe_allow_html=True)
+        st.markdown("""<div style="max-width:360px;margin:0 auto;padding:2rem 0;text-align:center;direction:rtl;">
+            <p style="color:#8B7355;font-size:.9rem;margin-bottom:1.5rem;line-height:1.8;">
+                هذا التقييم متاح للمرضى المحالين فقط.<br>
+                يرجى إدخال رمز الوصول الذي زوّدك به معالجك.
+            </p>
+        </div>""", unsafe_allow_html=True)
+        col_a, col_b, col_c = st.columns([1, 2, 1])
+        with col_b:
+            code = st.text_input("رمز الوصول", type="password",
+                                 placeholder="أدخل رمز الوصول",
+                                 label_visibility="collapsed")
+            if st.button("دخول", use_container_width=True):
+                if code == st.secrets.get("ACCESS_CODE", ""):
+                    st.session_state.access_granted = True
+                    st.rerun()
+                else:
+                    st.markdown("""<div style="background:#FFF0F0;border-right:3px solid #D9534F;
+                        border-left:none;padding:.8rem 1rem;border-radius:4px 0 0 4px;
+                        font-size:.88rem;color:#7A1A1A;margin:.5rem 0;
+                        direction:rtl;text-align:right;">
+                        &#9888; رمز الوصول غير صحيح. يرجى المراجعة والمحاولة مرة أخرى.
+                    </div>""", unsafe_allow_html=True)
+        st.stop()
 
     if st.session_state.submitted:
-        st.markdown("""
-        <div class="thank-you">
-            <h2>شكراً لك</h2>
-            <p>تم تسليم إجاباتك بنجاح.<br>
-            سيتواصل معك المعالج في أقرب وقت.</p>
-        </div>""", unsafe_allow_html=True)
+        st.markdown('<div class="thank-you-block"><h2>شكراً لك</h2><p>تم تسليم إجاباتك بنجاح.<br>سيتواصل معك المعالج في أقرب وقت.</p></div>', unsafe_allow_html=True)
         if st.session_state.get("email_error"):
             st.warning(f"ملاحظة: فشل إرسال البريد — {st.session_state.email_error}")
-
     else:
         if os.path.exists(LOGO_FILE):
             col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                st.image(LOGO_FILE, use_container_width=True)
+            with col2: st.image(LOGO_FILE, use_container_width=True)
 
-        st.markdown("""
-        <div class="page-header">
-            <p>تقييم نفسي سري</p>
-            <h1>استبيانات القلق</h1>
-        </div>""", unsafe_allow_html=True)
+        st.markdown('<div class="assessment-header"><p>تقييم نفسي سري</p><h1>مقياس بيك للاكتئاب</h1></div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:.88rem;color:#8B7355;text-align:center;margin-bottom:2rem;font-weight:300;line-height:1.9;direction:rtl;">اقرأ كل مجموعة من العبارات بعناية، ثم اختر العبارة التي تصف بشكل أفضل<br><strong>كيف كنت تشعر خلال الأسبوعين الماضيين</strong>، بما في ذلك اليوم.</p>', unsafe_allow_html=True)
 
-        client_name = st.text_input(
-            "اسمك باللغة الإنجليزية (اختياري)",
-            placeholder="Your name in English"
-        )
+        client_name = st.text_input("اسمك باللغة الإنجليزية (اختياري)", placeholder="Your name in English")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # ── PART 1: BAI ───────────────────────────────────────────────────────
-        st.markdown("""
-        <div class="section-divider">
-            <h2>الجزء الأول — مقياس بيك للقلق</h2>
-            <p>٢١ فقرة · الشهر الماضي · مقياس ٠–٣</p>
-        </div>
-        <p style="font-size:0.88rem;color:#6B5B45;text-align:center;margin-bottom:1.5rem;
-                  line-height:1.9;direction:rtl;">
-        حدّد مدى <strong>إزعاج كل عَرَض لك خلال الشهر الماضي</strong>، بما في ذلك اليوم.
-        </p>""", unsafe_allow_html=True)
+        answers = {}
+        all_answered = True
 
-        bai_responses    = {}
-        bai_all_answered = True
-
-        for q in BAI_QUESTIONS:
-            qid = q["id"]
-            st.markdown(f"""
-            <div class="question-card">
-                <div class="q-number">العَرَض {qid} من ٢١</div>
-                <div class="q-text">{q['text']}</div>
-            </div>""", unsafe_allow_html=True)
-
-            choice = st.radio(
-                label=f"bai_{qid}",
-                options=list(BAI_SCALE.values()),
-                index=None,
-                key=f"bai_{qid}",
-                label_visibility="collapsed",
-                horizontal=True,
-            )
+        for i, q in enumerate(BDI_QUESTIONS):
+            st.markdown(f'<div class="question-block"><div class="question-number">السؤال {i+1} من {len(BDI_QUESTIONS)}</div><div class="question-text">{q["theme_ar"]}</div></div>', unsafe_allow_html=True)
+            options_ar = [opt["ar"] for opt in q["options"]]
+            choice = st.radio(label=f"q_{i}", options=options_ar, index=None, key=f"q_{i}", label_visibility="collapsed")
             if choice is None:
-                bai_all_answered = False
+                all_answered = False
             else:
-                bai_responses[qid] = next(k for k, v in BAI_SCALE.items() if v == choice)
+                opt = next(o for o in q["options"] if o["ar"] == choice)
+                answers[i] = {"score": opt["score"], "text_en": opt["en"], "theme_en": q["theme_en"]}
 
-        # ── PART 2: PSWQ ─────────────────────────────────────────────────────
-        st.markdown("""
-        <div class="section-divider">
-            <h2>الجزء الثاني — استبيان القلق لجامعة بن ستيت</h2>
-            <p>١٦ فقرة · بشكل عام · مقياس ١–٥</p>
-        </div>
-        <p style="font-size:0.88rem;color:#6B5B45;text-align:center;margin-bottom:1.5rem;
-                  line-height:1.9;direction:rtl;">
-        قيّم كل عبارة بحسب <strong>مدى انطباقها عليك بشكل عام</strong>.<br>
-        ابدأ كل عبارة بـ <strong>"أنا..."</strong> وأجب بناءً على طبيعتك المعتادة.
-        </p>""", unsafe_allow_html=True)
+        answered_count = len(answers)
+        pct = int((answered_count / len(BDI_QUESTIONS)) * 100)
+        st.markdown(f'<div style="text-align:center;margin:1.5rem 0 .5rem 0;font-size:.78rem;color:#8B7355;letter-spacing:.05em;direction:rtl;">{answered_count} من {len(BDI_QUESTIONS)} سؤالاً تمت الإجابة عنه</div><div class="progress-bar-wrapper"><div class="progress-bar-fill" style="width:{pct}%"></div></div>', unsafe_allow_html=True)
 
-        pswq_responses    = {}
-        pswq_all_answered = True
+        if not all_answered and answered_count > 0:
+            st.markdown('<div style="background:#FFF8F0;border-right:3px solid #E07B39;border-left:none;padding:1rem 1.2rem;border-radius:4px 0 0 4px;font-size:.88rem;color:#7A3D1A;margin:1rem 0;direction:rtl;text-align:right;">⚠ يرجى الإجابة على جميع الأسئلة قبل التسليم.</div>', unsafe_allow_html=True)
 
-        for q in PSWQ_QUESTIONS:
-            qid = q["id"]
-            st.markdown(f"""
-            <div class="question-card">
-                <div class="q-number">العبارة {qid} من ١٦</div>
-                <div class="q-text">{q['text']}</div>
-            </div>""", unsafe_allow_html=True)
-
-            choice = st.radio(
-                label=f"pswq_{qid}",
-                options=list(PSWQ_SCALE.values()),
-                index=None,
-                key=f"pswq_{qid}",
-                label_visibility="collapsed",
-                horizontal=True,
-            )
-            if choice is None:
-                pswq_all_answered = False
-            else:
-                pswq_responses[qid] = next(k for k, v in PSWQ_SCALE.items() if v == choice)
-
-        # ── Progress ──────────────────────────────────────────────────────────
-        total_q      = 21 + 16
-        answered     = len(bai_responses) + len(pswq_responses)
-        pct          = int((answered / total_q) * 100)
-        all_answered = bai_all_answered and pswq_all_answered
-
-        st.markdown(f"""
-        <div style="text-align:center;font-size:0.78rem;color:#6B5B45;
-                    letter-spacing:0.05em;margin-top:1.5rem;direction:rtl;">
-            {answered} من {total_q} سؤالاً تمت الإجابة عنه
-        </div>
-        <div class="progress-wrap">
-            <div class="progress-fill" style="width:{pct}%"></div>
-        </div>""", unsafe_allow_html=True)
-
-        if not all_answered and answered > 0:
-            st.markdown("""
-            <div style="background:#FFF8F0;border-right:3px solid #E07B39;border-left:none;
-                        padding:1rem 1.2rem;border-radius:4px 0 0 4px;
-                        font-size:0.88rem;color:#7A3D1A;margin:1rem 0;
-                        direction:rtl;text-align:right;">
-                ⚠ يرجى الإجابة على جميع الأسئلة السبعة والثلاثين قبل التسليم.
-            </div>""", unsafe_allow_html=True)
-
-        # ── Name validation ───────────────────────────────────────────────────
         has_arabic_name = any('\u0600' <= c <= '\u06ff' for c in (client_name or ""))
 
         st.markdown('<div style="text-align:center;padding:2rem 0 3rem 0;">', unsafe_allow_html=True)
-        submit = st.button("تسليم الاستبيان", disabled=not all_answered)
+        submit = st.button("تسليم الاختبار", disabled=not all_answered)
         st.markdown('</div>', unsafe_allow_html=True)
 
         if submit and has_arabic_name:
-            st.markdown("""
-            <div style="background:#FFF0F0;border-right:3px solid #D9534F;border-left:none;
-                        padding:1rem 1.2rem;border-radius:4px 0 0 4px;
-                        font-size:0.92rem;color:#7A1A1A;margin:0.5rem 0;
-                        direction:rtl;text-align:right;font-weight:500;">
-                ⚠ يرجى كتابة اسمك باللغة الإنجليزية فقط. الأسماء المكتوبة بالعربية غير مقبولة.
-            </div>""", unsafe_allow_html=True)
+            st.markdown('<div style="background:#FFF0F0;border-right:3px solid #D9534F;border-left:none;padding:1rem 1.2rem;border-radius:4px 0 0 4px;font-size:.92rem;color:#7A1A1A;margin:.5rem 0;direction:rtl;text-align:right;font-weight:500;">⚠ يرجى كتابة اسمك باللغة الإنجليزية فقط. الأسماء المكتوبة بالعربية غير مقبولة.</div>', unsafe_allow_html=True)
 
         if submit and all_answered and not has_arabic_name:
             with st.spinner("جاري تسليم إجاباتك..."):
-                bai_total  = calculate_bai_total(bai_responses)
-                pswq_total = calculate_pswq_total(pswq_responses)
-                report_text = generate_report(
-                    client_name or "Anonymous",
-                    bai_total, bai_responses,
-                    pswq_total, pswq_responses,
-                )
+                total_score = calculate_score(answers)
+                severity    = get_severity_level(total_score)
+                breakdown   = get_score_breakdown(answers)
+                report_text = generate_report(client_name or "Anonymous", total_score, severity, breakdown, answers)
 
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 safe_name = (client_name or "anonymous").replace(" ", "_").lower()
-                filename  = f"Anxiety_{safe_name}_{timestamp}.pdf"
+                filename  = f"BDI_{safe_name}_{timestamp}.pdf"
                 os.makedirs("reports", exist_ok=True)
                 pdf_path  = os.path.join("reports", filename)
 
                 try:
-                    create_pdf_report(
-                        pdf_path, client_name or "Anonymous",
-                        bai_total, bai_responses,
-                        pswq_total, pswq_responses,
-                        report_text, timestamp,
-                    )
+                    create_pdf_report(pdf_path, client_name or "Anonymous",
+                                      total_score, severity, report_text, answers, timestamp)
                 except Exception as pdf_err:
-                    st.error(f"خطأ في إنشاء التقرير: {pdf_err}")
-                    st.stop()
+                    st.error(f"خطأ في إنشاء التقرير: {pdf_err}"); st.stop()
 
                 email_error = None
                 try:
-                    send_report_email(pdf_path, client_name or "Anonymous",
-                                      bai_total, pswq_total, filename)
+                    send_report_email(pdf_path, client_name or "Anonymous", total_score, severity, filename)
                 except Exception as e:
                     email_error = str(e)
 
-                st.session_state.submitted    = True
-                st.session_state.email_error  = email_error
+                st.session_state.submitted   = True
+                st.session_state.email_error = email_error
                 st.rerun()
